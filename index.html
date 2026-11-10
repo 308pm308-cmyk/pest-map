@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台灣蟲害預測分布系統</title>
+    
+    <!-- Google Maps JavaScript API（串接指定金鑰）-->
+    <script>
+        // Google Maps 載入完成後的進入點：確保 DOM 就緒再初始化地圖
+        function __initGoogleMap() {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initMap);
+            } else {
+                initMap();
+            }
+        }
+        // 金鑰驗證失敗時，Google Maps 會呼叫此全域函式
+        window.gm_authFailure = function () {
+            if (typeof handleMapError === 'function') {
+                handleMapError(new Error('Google Maps 金鑰驗證失敗：請確認金鑰已啟用 Maps JavaScript API、已綁定計費帳戶，並允許目前網域（HTTP referrer）。'));
+            }
+        };
+    </script>
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAL6OOA6s2s9LJvH_A2HwjYm2bl7_kt3PU&loading=async&callback=__initGoogleMap"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #315B8C 0%, #24466b 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.95;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 30px;
+        }
+
+        .control-panel {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .map-container {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        #map {
+            height: 600px;
+            width: 100%;
+            border-radius: 10px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #315B8C;
+            box-shadow: 0 0 0 3px rgba(49, 91, 140, 0.15);
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #315B8C 0%, #24466b 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(49, 91, 140, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .result-panel {
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 15px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .result-panel.show {
+            display: block;
+        }
+
+        .signal-light {
+            width: 100%;
+            height: 100px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .signal-green {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%);
+        }
+
+        .signal-yellow {
+            background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
+        }
+
+        .signal-red {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }
+
+        .signal-unknown {
+            background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%);
+        }
+
+        .signal-water {
+            background: linear-gradient(135deg, #0072B2 0%, #56B4E9 100%);
+        }
+
+        .prevention-level {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+
+        .prevention-level h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+
+        .prevention-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #315B8C;
+            background: #f8f9fa;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .coordinates-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: center;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .legend-color {
+            width: 25px;
+            height: 25px;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        @media (max-width: 968px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 1.8rem;
+            }
+
+            #map {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🐛 台灣蟲害預測分布系統 🦋</h1>
+            <p>輸入經緯度座標，即時查詢<span id="speciesTitle">斜紋夜蛾</span>風險等級與防治建議（串接雲端 MaxEnt 模型）</p>
+        </div>
+
+        <div class="main-content">
+            <div class="control-panel">
+                <h2 style="color: #333; margin-bottom: 25px;">📍 位置輸入</h2>
+                
+                <div class="input-group">
+                    <label for="speciesSelect">目標物種 (Species)</label>
+                    <select id="speciesSelect" onchange="changeSpecies()"
+                        style="width:100%;padding:12px 15px;border:2px solid #e0e0e0;border-radius:10px;font-size:1rem;background:#fff;cursor:pointer;">
+                        <option value="SL">斜紋夜蛾 (Spodoptera litura)</option>
+                        <option value="SE">甜菜夜蛾 (Spodoptera exigua)</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label for="latitude">緯度 (Latitude)</label>
+                    <input type="number" id="latitude" placeholder="例如: 25.0330" step="0.0001" min="21.5" max="25.5">
+                </div>
+                
+                <div class="input-group">
+                    <label for="longitude">經度 (Longitude)</label>
+                    <input type="number" id="longitude" placeholder="例如: 121.5654" step="0.0001" min="119.5" max="122.5">
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="predictPest()">🔍 開始預測</button>
+                    <button class="btn btn-secondary" onclick="getCurrentLocation()">📍 取得目前位置</button>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="setRandomLocation()">🎲 隨機測試</button>
+                    <button class="btn btn-secondary" onclick="clearAll()">🔄 清除重置</button>
+                </div>
+
+                <div id="result" class="result-panel">
+                    <h3 style="color: #333; margin-bottom: 15px;">🚨 預測結果</h3>
+                    <div id="signalLight" class="signal-light"></div>
+                    
+                    <div class="prevention-level">
+                        <h3>🛡️ 防治等級與建議</h3>
+                        <div id="preventionSuggestions"></div>
+                    </div>
+                </div>
+
+                <div class="coordinates-display">
+                    <strong>台灣地理範圍</strong><br>
+                    緯度: 21.5° - 25.5° N<br>
+                    經度: 119.5° - 122.5° E<br>
+                    <small style="color: #999; display: block; margin-top: 8px;">
+                        模型解析度：1 公里網格
+                    </small>
+                </div>
+            </div>
+
+            <div class="map-container">
+                <h2 style="color: #333; margin-bottom: 15px;">🗺️ 地圖顯示</h2>
+                <div id="map">
+                    <div class="loading" id="mapLoading">地圖載入中...</div>
+                </div>
+                <div class="legend">
+                    <strong style="margin-bottom: 10px; display: block;">風險等級（模型 1 公里網格）</strong>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%);"></div>
+                        <span>低風險</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);"></div>
+                        <span>中風險</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);"></div>
+                        <span>高風險</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全域變數宣告
+        let map = null;
+        let currentMarker = null;
+        let riskCircles = [];
+        let predictionCircle = null;
+        let modelOverlay = null;
+        let waterOverlay = null;
+        const WATER_OVERLAY_PNG = "data:image/png;base64,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";     // 全台模型預測面 (imageOverlay)
+        let infoWindow = null;       // Google Maps 資訊視窗（marker／circle 共用）
+        let fieldCircles = [];       // 田間調查點的 Google Maps Circle 陣列
+        let layerControlDiv = null;
+        let layerRequestId = 0;      // 每次重建圖層遞增，用來丟棄過期的非同步結果  // 自訂圖層切換控制面板（DOM）
+
+        // 雲端 SDM API 位址
+        const API_BASE = "https://sdm-api-711180126398.asia-east1.run.app";   // 2026-08-21 改指新 Cloud Run service (sdm-api)
+
+        // 真實模型風險點 (sl_location_clean_risk.csv)
+        let currentSpecies = 'SL';
+        const riskAreasSL = [
+{lat: 23.535220, lng: 120.191900, risk: 'low', suit: 0.3182, site: 'P00232', town: '雲林縣口湖鄉', crop: '黃麻'},
+{lat: 23.685300, lng: 120.196600, risk: 'low', suit: 0.3224, site: 'P00879', town: '雲林縣臺西鄉', crop: '玉米'},
+{lat: 23.668100, lng: 120.202700, risk: 'low', suit: 0.3095, site: 'P00214', town: '雲林縣臺西鄉', crop: '玉米'},
+{lat: 23.667800, lng: 120.203300, risk: 'low', suit: 0.3095, site: 'P00215', town: '雲林縣臺西鄉', crop: '玉米'},
+{lat: 23.564790, lng: 120.204900, risk: 'low', suit: 0.3276, site: 'P00233', town: '雲林縣口湖鄉', crop: '黃麻'},
+{lat: 23.697910, lng: 120.207000, risk: 'low', suit: 0.3295, site: 'P00214', town: '雲林縣臺西鄉', crop: '玉米'},
+{lat: 23.701500, lng: 120.213600, risk: 'low', suit: 0.3301, site: 'P00879', town: '雲林縣臺西鄉', crop: '玉米'},
+{lat: 23.607920, lng: 120.215800, risk: 'low', suit: 0.3237, site: 'P00217', town: '雲林縣四湖鄉', crop: '蒜'},
+{lat: 23.618640, lng: 120.222800, risk: 'low', suit: 0.3249, site: 'P00216', town: '雲林縣四湖鄉', crop: '蒜'},
+{lat: 23.553630, lng: 120.236300, risk: 'low', suit: 0.3479, site: 'P00231', town: '雲林縣水林鄉', crop: '水稻'},
+{lat: 23.397610, lng: 120.240800, risk: 'low', suit: 0.3025, site: 'P00212', town: '嘉義縣義竹鄉', crop: '落花生'},
+{lat: 23.560580, lng: 120.252700, risk: 'low', suit: 0.3630, site: 'P00230', town: '雲林縣水林鄉', crop: '水稻'},
+{lat: 23.694440, lng: 120.256700, risk: 'low', suit: 0.3423, site: 'P00210', town: '雲林縣東勢鄉', crop: '大豆'},
+{lat: 23.743070, lng: 120.265300, risk: 'low', suit: 0.3525, site: 'P00876', town: '雲林縣麥寮鄉', crop: '落花生'},
+{lat: 23.695900, lng: 120.266200, risk: 'low', suit: 0.3500, site: 'P00211', town: '雲林縣東勢鄉', crop: '大豆'},
+{lat: 23.361680, lng: 120.274900, risk: 'high', suit: 0.8534, site: 'Q00018', town: '嘉義縣義竹鄉', crop: '玉米'},
+{lat: 23.368880, lng: 120.277300, risk: 'low', suit: 0.4554, site: 'Q00017', town: '嘉義縣鹿草鄉', crop: '玉米'},
+{lat: 23.737120, lng: 120.284400, risk: 'low', suit: 0.3653, site: 'P00875', town: '雲林縣東勢鄉', crop: '落花生'},
+{lat: 23.606720, lng: 120.285700, risk: 'low', suit: 0.3941, site: 'P00228', town: '雲林縣北港鎮', crop: '落花生'},
+{lat: 23.606550, lng: 120.286300, risk: 'low', suit: 0.3941, site: 'P00228', town: '雲林縣北港鎮', crop: '落花生'},
+{lat: 23.628530, lng: 120.294900, risk: 'low', suit: 0.3976, site: 'P00229', town: '雲林縣元長鄉', crop: '玉米'},
+{lat: 23.618770, lng: 120.295900, risk: 'low', suit: 0.3994, site: 'P00229', town: '雲林縣北港鎮', crop: '落花生'},
+{lat: 23.094660, lng: 120.296900, risk: 'low', suit: 0.2743, site: 'D00146', town: '臺南市新市區', crop: '甜椒'},
+{lat: 23.697500, lng: 120.300800, risk: 'low', suit: 0.3939, site: 'P00206', town: '雲林縣褒忠鄉', crop: '玉米'},
+{lat: 23.690000, lng: 120.301700, risk: 'low', suit: 0.3949, site: 'P00207', town: '雲林縣褒忠鄉', crop: '水稻'},
+{lat: 23.721700, lng: 120.308400, risk: 'low', suit: 0.4000, site: 'P00205', town: '雲林縣褒忠鄉', crop: '落花生'},
+{lat: 23.085830, lng: 120.311400, risk: 'low', suit: 0.2888, site: 'D00145', town: '臺南市新市區', crop: '玉米'},
+{lat: 23.097240, lng: 120.312900, risk: 'low', suit: 0.3182, site: 'D00144', town: '臺南市新市區', crop: '西瓜'},
+{lat: 23.106680, lng: 120.313100, risk: 'low', suit: 0.3991, site: 'D00143', town: '臺南市新市區', crop: '西瓜'},
+{lat: 23.914490, lng: 120.330900, risk: 'medium', suit: 0.5827, site: 'N00093', town: '彰化縣芳苑鄉', crop: '落花生'},
+{lat: 23.915610, lng: 120.331400, risk: 'medium', suit: 0.5827, site: 'N00092', town: '彰化縣芳苑鄉', crop: '落花生'},
+{lat: 23.915860, lng: 120.332300, risk: 'medium', suit: 0.5827, site: 'N00094', town: '彰化縣芳苑鄉', crop: '落花生'},
+{lat: 23.661000, lng: 120.334500, risk: 'low', suit: 0.4327, site: 'P00226', town: '雲林縣元長鄉', crop: '落花生'},
+{lat: 23.652750, lng: 120.336200, risk: 'low', suit: 0.4348, site: 'P00227', town: '雲林縣元長鄉', crop: '落花生'},
+{lat: 23.515540, lng: 120.337100, risk: 'low', suit: 0.4761, site: 'Q00026', town: '嘉義縣新港鄉', crop: '蔬菜'},
+{lat: 23.775780, lng: 120.340200, risk: 'low', suit: 0.4351, site: 'P00873', town: '雲林縣崙背鄉', crop: '芹菜'},
+{lat: 23.574580, lng: 120.341600, risk: 'low', suit: 0.4672, site: 'Q00015', town: '嘉義縣新港鄉', crop: '蔬菜'},
+{lat: 23.783140, lng: 120.344200, risk: 'low', suit: 0.4434, site: 'P00874', town: '雲林縣崙背鄉', crop: '芥藍'},
+{lat: 23.571440, lng: 120.344400, risk: 'low', suit: 0.4799, site: 'Q00013', town: '嘉義縣新港鄉', crop: '蔬菜'},
+{lat: 23.570670, lng: 120.349800, risk: 'low', suit: 0.4799, site: 'Q00011', town: '嘉義縣新港鄉', crop: '蕹菜'},
+{lat: 23.774170, lng: 120.350300, risk: 'low', suit: 0.4460, site: 'P00874', town: '雲林縣崙背鄉', crop: '玉米'},
+{lat: 23.776070, lng: 120.351700, risk: 'low', suit: 0.4502, site: 'P00873', town: '雲林縣崙背鄉', crop: '玉米'},
+{lat: 23.799400, lng: 120.358300, risk: 'low', suit: 0.4603, site: 'P00234', town: '雲林縣二崙鄉', crop: '蔬菜'},
+{lat: 23.306490, lng: 120.358400, risk: 'low', suit: 0.3797, site: 'D00139', town: '臺南市東山區', crop: '絲瓜'},
+{lat: 23.737900, lng: 120.360900, risk: 'low', suit: 0.4421, site: 'P00220', town: '雲林縣土庫鎮', crop: '無作物'},
+{lat: 23.737630, lng: 120.361000, risk: 'low', suit: 0.4421, site: 'P01007', town: '雲林縣土庫鎮', crop: '玉米'},
+{lat: 23.308370, lng: 120.362700, risk: 'low', suit: 0.3797, site: 'D00142', town: '臺南市東山區', crop: '絲瓜'},
+{lat: 23.303550, lng: 120.367600, risk: 'low', suit: 0.3773, site: 'D00140', town: '臺南市東山區', crop: '絲瓜'},
+{lat: 23.694560, lng: 120.368500, risk: 'low', suit: 0.4565, site: 'P00220', town: '雲林縣土庫鎮', crop: '蔥'},
+{lat: 23.307380, lng: 120.368600, risk: 'low', suit: 0.3773, site: 'D00141', town: '臺南市東山區', crop: '絲瓜'},
+{lat: 23.633470, lng: 120.371900, risk: 'low', suit: 0.4765, site: 'P00546', town: '雲林縣元長鄉', crop: '落花生'},
+{lat: 23.657870, lng: 120.374600, risk: 'low', suit: 0.4721, site: 'P00547', town: '雲林縣土庫鎮', crop: '落花生'},
+{lat: 23.925420, lng: 120.374700, risk: 'low', suit: 0.5381, site: 'N00088', town: '彰化縣芳苑鄉', crop: '落花生'},
+{lat: 23.925520, lng: 120.375500, risk: 'medium', suit: 0.5495, site: 'N00087', town: '彰化縣芳苑鄉', crop: '大豆'},
+{lat: 23.930560, lng: 120.376500, risk: 'medium', suit: 0.5495, site: 'N00091', town: '彰化縣芳苑鄉', crop: '包心白菜'},
+{lat: 23.929920, lng: 120.376600, risk: 'medium', suit: 0.5495, site: 'N00090', town: '彰化縣芳苑鄉', crop: '蔥'},
+{lat: 23.924250, lng: 120.377300, risk: 'medium', suit: 0.5518, site: 'N00086', town: '彰化縣芳苑鄉', crop: '大豆'},
+{lat: 23.928120, lng: 120.377600, risk: 'medium', suit: 0.5495, site: 'N00089', town: '彰化縣芳苑鄉', crop: '甘藍'},
+{lat: 23.681210, lng: 120.380500, risk: 'low', suit: 0.4725, site: 'P00221', town: '雲林縣土庫鎮', crop: '玉米'},
+{lat: 23.793000, lng: 120.386300, risk: 'low', suit: 0.4859, site: 'P00235', town: '雲林縣二崙鄉', crop: '蔬菜'},
+{lat: 23.647930, lng: 120.394900, risk: 'low', suit: 0.5130, site: 'P00212', town: '雲林縣大埤鄉', crop: '落花生'},
+{lat: 23.662680, lng: 120.401300, risk: 'low', suit: 0.5190, site: 'P00212', town: '雲林縣大埤鄉', crop: '無作物'},
+{lat: 23.722850, lng: 120.406600, risk: 'low', suit: 0.5068, site: 'P00001', town: '雲林縣虎尾鎮', crop: '落花生'},
+{lat: 23.720810, lng: 120.414200, risk: 'medium', suit: 0.5413, site: 'P00002', town: '雲林縣虎尾鎮', crop: '落花生'},
+{lat: 23.784560, lng: 120.430200, risk: 'low', suit: 0.5124, site: 'P00209', town: '雲林縣西螺鎮', crop: '蔬菜'},
+{lat: 23.623970, lng: 120.430500, risk: 'medium', suit: 0.7561, site: 'P00877', town: '雲林縣大埤鄉', crop: '玉米'},
+{lat: 23.623530, lng: 120.430600, risk: 'medium', suit: 0.7561, site: 'P00877', town: '雲林縣大埤鄉', crop: '玉米'},
+{lat: 23.792000, lng: 120.440600, risk: 'low', suit: 0.5285, site: 'P00208', town: '雲林縣西螺鎮', crop: '蔬菜'},
+{lat: 24.036210, lng: 120.453800, risk: 'medium', suit: 0.6364, site: 'N00085', town: '彰化縣福興鄉', crop: '甘藍'},
+{lat: 24.030530, lng: 120.454900, risk: 'medium', suit: 0.6321, site: 'N00084', town: '彰化縣福興鄉', crop: '甘藍'},
+{lat: 24.030780, lng: 120.455500, risk: 'medium', suit: 0.6321, site: 'N00083', town: '彰化縣福興鄉', crop: '甘藍'},
+{lat: 23.740590, lng: 120.495500, risk: 'medium', suit: 0.5894, site: 'P00872', town: '雲林縣莿桐鄉', crop: '落花生'},
+{lat: 23.736650, lng: 120.495600, risk: 'medium', suit: 0.5894, site: 'P00237', town: '雲林縣莿桐鄉', crop: '落花生'},
+{lat: 23.736000, lng: 120.500600, risk: 'medium', suit: 0.5954, site: 'P00237', town: '雲林縣莿桐鄉', crop: '落花生'},
+{lat: 23.751100, lng: 120.516200, risk: 'medium', suit: 0.5984, site: 'P00872', town: '雲林縣莿桐鄉', crop: '落花生'},
+{lat: 24.178710, lng: 120.566700, risk: 'low', suit: 0.5221, site: 'B00046', town: '臺中市龍井區', crop: '玉米'},
+{lat: 24.113830, lng: 120.572500, risk: 'medium', suit: 0.7442, site: 'B00047', town: '臺中市大肚區', crop: '玉米'},
+{lat: 24.152400, lng: 120.573100, risk: 'medium', suit: 0.6078, site: 'B00048', town: '臺中市南屯區', crop: '甘藷'},
+{lat: 23.754170, lng: 120.586900, risk: 'medium', suit: 0.6354, site: 'P00224', town: '雲林縣林內鄉', crop: '香蕉'},
+{lat: 23.757350, lng: 120.587600, risk: 'medium', suit: 0.6354, site: 'P00225', town: '雲林縣林內鄉', crop: '水稻'},
+{lat: 24.309600, lng: 120.595000, risk: 'low', suit: 0.4045, site: 'B00043', town: '臺中市清水區', crop: '芋'},
+{lat: 23.774540, lng: 120.595900, risk: 'medium', suit: 0.6343, site: 'P00224', town: '雲林縣林內鄉', crop: '芋'},
+{lat: 24.381190, lng: 120.596400, risk: 'medium', suit: 0.5422, site: 'B00041', town: '臺中市大安區', crop: '芋'},
+{lat: 23.764130, lng: 120.597800, risk: 'medium', suit: 0.6328, site: 'P00225', town: '雲林縣林內鄉', crop: '芋'},
+{lat: 24.219880, lng: 120.602000, risk: 'low', suit: 0.5231, site: 'B00051', town: '臺中市大雅區', crop: '薑'},
+{lat: 24.237700, lng: 120.603900, risk: 'low', suit: 0.5223, site: 'B00045', town: '臺中市大雅區', crop: '落花生'},
+{lat: 23.762950, lng: 120.604300, risk: 'medium', suit: 0.6274, site: 'P00225', town: '雲林縣林內鄉', crop: '水稻'},
+{lat: 24.266850, lng: 120.606400, risk: 'low', suit: 0.5096, site: 'B00044', town: '臺中市沙鹿區', crop: '薑'},
+{lat: 23.770320, lng: 120.624800, risk: 'medium', suit: 0.6163, site: 'P01008', town: '雲林縣林內鄉', crop: '胡瓜'},
+{lat: 24.215150, lng: 120.631000, risk: 'medium', suit: 0.5615, site: 'B00050', town: '臺中市大雅區', crop: '玉米'},
+{lat: 24.392970, lng: 120.635900, risk: 'medium', suit: 0.5679, site: 'B00039', town: '臺中市大甲區', crop: '芋'},
+{lat: 24.349670, lng: 120.637600, risk: 'high', suit: 0.9124, site: 'B00040', town: '臺中市大甲區', crop: '芋'},
+{lat: 24.287850, lng: 120.639900, risk: 'medium', suit: 0.5951, site: 'B00049', town: '臺中市神岡區', crop: '甘藷'},
+{lat: 24.087390, lng: 120.640500, risk: 'low', suit: 0.4957, site: 'B00052', town: '臺中市烏日區', crop: '蔬菜'},
+{lat: 24.312400, lng: 120.659100, risk: 'medium', suit: 0.5541, site: 'B00053', town: '臺中市后里區', crop: '玉米'},
+{lat: 24.349820, lng: 120.689800, risk: 'medium', suit: 0.5586, site: 'B00042', town: '臺中市外埔區', crop: '芋'},
+{lat: 24.336990, lng: 120.736500, risk: 'medium', suit: 0.5588, site: 'B00054', town: '臺中市后里區', crop: '芋'},
+{lat: 24.501530, lng: 120.809100, risk: 'medium', suit: 0.7260, site: 'K00059', town: '苗栗縣銅鑼鄉', crop: '特用'},
+{lat: 24.499530, lng: 120.809400, risk: 'medium', suit: 0.7077, site: 'K00060', town: '苗栗縣銅鑼鄉', crop: '特用'},
+{lat: 24.508390, lng: 120.809700, risk: 'high', suit: 0.7742, site: 'K00061', town: '苗栗縣銅鑼鄉', crop: '特用'},
+{lat: 24.509850, lng: 120.810100, risk: 'high', suit: 0.7742, site: 'K00045', town: '苗栗縣銅鑼鄉', crop: '特用'},
+{lat: 24.484360, lng: 120.810700, risk: 'medium', suit: 0.7008, site: 'K00057', town: '苗栗縣銅鑼鄉', crop: '特用'},
+{lat: 24.482080, lng: 120.811100, risk: 'medium', suit: 0.6972, site: 'K00056', town: '苗栗縣銅鑼鄉', crop: '特用'},
+{lat: 24.266000, lng: 120.811400, risk: 'low', suit: 0.5283, site: 'B00055', town: '臺中市石岡區', crop: '梨子'},
+{lat: 24.207890, lng: 120.812300, risk: 'low', suit: 0.5004, site: 'B00056', town: '臺中市新社區', crop: '芋'},
+{lat: 24.497360, lng: 120.814100, risk: 'medium', suit: 0.7077, site: 'K00247', town: '苗栗縣公館鄉', crop: '芋'},
+{lat: 24.487280, lng: 120.815600, risk: 'medium', suit: 0.7008, site: 'K00047', town: '苗栗縣公館鄉', crop: '特用'},
+{lat: 24.501370, lng: 120.816000, risk: 'medium', suit: 0.7260, site: 'K00046', town: '苗栗縣公館鄉', crop: '特用'},
+{lat: 24.480330, lng: 120.816200, risk: 'medium', suit: 0.6972, site: 'K00049', town: '苗栗縣公館鄉', crop: '特用'},
+{lat: 24.476600, lng: 120.816400, risk: 'medium', suit: 0.6972, site: 'K00050', town: '苗栗縣公館鄉', crop: '特用'},
+{lat: 24.482940, lng: 120.816700, risk: 'medium', suit: 0.7069, site: 'K00048', town: '苗栗縣公館鄉', crop: '特用'},
+{lat: 24.510270, lng: 120.830100, risk: 'medium', suit: 0.7536, site: 'K00044', town: '苗栗縣公館鄉', crop: '特用'},
+{lat: 24.211470, lng: 120.839400, risk: 'low', suit: 0.4619, site: 'B00057', town: '臺中市東勢區', crop: '柿子'},
+{lat: 24.175110, lng: 120.879400, risk: 'low', suit: 0.3997, site: 'B00058', town: '臺中市和平區', crop: '梨子'},
+{lat: 24.844930, lng: 120.958700, risk: 'medium', suit: 0.7196, site: 'J00218', town: '新竹縣竹北市', crop: '蔬菜'},
+{lat: 24.839880, lng: 120.992400, risk: 'high', suit: 0.8387, site: 'J00219', town: '新竹縣竹北市', crop: '蔬菜'},
+{lat: 24.952120, lng: 121.019700, risk: 'high', suit: 0.9821, site: 'H00285', town: '桃園市新屋區', crop: '南瓜'},
+{lat: 24.997870, lng: 121.033500, risk: 'high', suit: 0.8478, site: 'H00287', town: '桃園市新屋區', crop: '南瓜'},
+{lat: 25.015330, lng: 121.058200, risk: 'high', suit: 0.9289, site: 'H00295', town: '桃園市觀音區', crop: '玉米'},
+{lat: 24.916360, lng: 121.078100, risk: 'medium', suit: 0.7223, site: 'H00291', town: '桃園市楊梅區', crop: '蔬菜'},
+{lat: 24.917110, lng: 121.098700, risk: 'medium', suit: 0.7227, site: 'H00289', town: '桃園市楊梅區', crop: '蔬菜'},
+{lat: 24.990900, lng: 121.101700, risk: 'medium', suit: 0.7572, site: 'H00286', town: '桃園市新屋區', crop: '南瓜'},
+{lat: 25.008130, lng: 121.109900, risk: 'high', suit: 0.7647, site: 'H00296', town: '桃園市觀音區', crop: '大豆'},
+{lat: 24.953920, lng: 121.113300, risk: 'medium', suit: 0.7380, site: 'H00284', town: '桃園市新屋區', crop: '蔬菜'},
+{lat: 24.945030, lng: 121.133600, risk: 'medium', suit: 0.7469, site: 'H00290', town: '桃園市楊梅區', crop: '蔬菜'},
+{lat: 25.012130, lng: 121.151700, risk: 'high', suit: 0.7653, site: 'H00297', town: '桃園市觀音區', crop: '南瓜'},
+{lat: 24.934030, lng: 121.159100, risk: 'high', suit: 0.7738, site: 'H00288', town: '桃園市楊梅區', crop: '落花生'},
+{lat: 24.995930, lng: 121.160900, risk: 'high', suit: 0.7632, site: 'H00298', town: '桃園市觀音區', crop: '玉米'},
+{lat: 25.031790, lng: 121.202700, risk: 'high', suit: 0.7688, site: 'H00280', town: '桃園市大園區', crop: '蔬菜'},
+{lat: 25.026760, lng: 121.232900, risk: 'high', suit: 0.7767, site: 'H00279', town: '桃園市大園區', crop: '胡瓜'},
+{lat: 25.008880, lng: 121.253600, risk: 'high', suit: 0.8651, site: 'H00293', town: '桃園市蘆竹區', crop: '茄子'},
+{lat: 24.934930, lng: 121.264600, risk: 'high', suit: 0.9361, site: 'H00245', town: '桃園市八德區', crop: '玉米'},
+{lat: 25.045350, lng: 121.266100, risk: 'high', suit: 0.7921, site: 'H00292', town: '桃園市蘆竹區', crop: '蔬菜'},
+{lat: 24.959200, lng: 121.268100, risk: 'high', suit: 0.8582, site: 'H00243', town: '桃園市八德區', crop: '小葉菜類'},
+{lat: 24.999950, lng: 121.268700, risk: 'high', suit: 0.8755, site: 'H00294', town: '桃園市蘆竹區', crop: '龍鬚菜'},
+{lat: 24.974110, lng: 121.279300, risk: 'high', suit: 0.9199, site: 'H00242', town: '桃園市八德區', crop: '蔬菜'},
+{lat: 24.945130, lng: 121.283300, risk: 'high', suit: 0.8297, site: 'H00244', town: '桃園市八德區', crop: '蔬菜'},
+{lat: 24.889670, lng: 121.292000, risk: 'high', suit: 0.8035, site: 'H00281', town: '桃園市大溪區', crop: '南瓜'},
+{lat: 24.904760, lng: 121.294300, risk: 'high', suit: 0.8049, site: 'H00282', town: '桃園市大溪區', crop: '韭'},
+{lat: 24.859060, lng: 121.294400, risk: 'high', suit: 0.7966, site: 'H00283', town: '桃園市大溪區', crop: '蔬菜'},
+{lat: 23.706490, lng: 121.412600, risk: 'low', suit: 0.3597, site: 'U00080', town: '花蓮縣萬榮鄉', crop: '大豆'},
+{lat: 23.756080, lng: 121.455000, risk: 'low', suit: 0.3637, site: 'U00083', town: '花蓮縣鳳林鎮', crop: '大豆'},
+{lat: 23.769130, lng: 121.469500, risk: 'low', suit: 0.3657, site: 'U00084', town: '花蓮縣鳳林鎮', crop: '南瓜'},
+{lat: 23.849430, lng: 121.500200, risk: 'low', suit: 0.3751, site: 'U00243', town: '花蓮縣壽豐鄉', crop: '辣椒'},
+{lat: 23.849580, lng: 121.514100, risk: 'low', suit: 0.3749, site: 'U00076', town: '花蓮縣壽豐鄉', crop: '無'},
+{lat: 23.899840, lng: 121.523900, risk: 'low', suit: 0.3755, site: 'U00075', town: '花蓮縣壽豐鄉', crop: '南瓜'},
+{lat: 25.147870, lng: 121.529100, risk: 'high', suit: 0.8034, site: 'A00025', town: '臺北市北投區', crop: '果樹'},
+{lat: 23.957790, lng: 121.553400, risk: 'low', suit: 0.3504, site: 'U00031', town: '花蓮縣吉安鄉', crop: '水稻'},
+{lat: 23.962590, lng: 121.562200, risk: 'low', suit: 0.3545, site: 'U00032', town: '花蓮縣吉安鄉', crop: '龍鬚菜'},
+{lat: 23.993470, lng: 121.569500, risk: 'low', suit: 0.3715, site: 'U00033', town: '花蓮縣花蓮市', crop: '隼人瓜'},
+{lat: 25.127790, lng: 121.574700, risk: 'medium', suit: 0.6850, site: 'A00026', town: '臺北市士林區', crop: '蔬菜'},
+{lat: 24.664780, lng: 121.634900, risk: 'low', suit: 0.4956, site: 'G00046', town: '宜蘭縣三星鄉', crop: '蔥'},
+{lat: 24.664840, lng: 121.636400, risk: 'low', suit: 0.4956, site: 'G00044', town: '宜蘭縣三星鄉', crop: '蔥'},
+{lat: 24.681970, lng: 121.658300, risk: 'medium', suit: 0.5495, site: 'G00045', town: '宜蘭縣三星鄉', crop: '蔥'},
+{lat: 24.686260, lng: 121.658600, risk: 'medium', suit: 0.5586, site: 'G00045', town: '宜蘭縣三星鄉', crop: '蔥'},
+{lat: 24.694680, lng: 121.679600, risk: 'medium', suit: 0.6008, site: 'G00044', town: '宜蘭縣三星鄉', crop: '蔥'},
+{lat: 24.690850, lng: 121.682200, risk: 'medium', suit: 0.5967, site: 'G00046', town: '宜蘭縣三星鄉', crop: '蔥'},
+{lat: 24.666390, lng: 121.687000, risk: 'medium', suit: 0.5690, site: 'G00043', town: '宜蘭縣三星鄉', crop: '蔥'},
+{lat: 24.666370, lng: 121.687200, risk: 'medium', suit: 0.5690, site: 'G00047', town: '宜蘭縣三星鄉', crop: '蔥'},
+{lat: 24.709070, lng: 121.712400, risk: 'medium', suit: 0.6325, site: 'G00055', town: '宜蘭縣員山鄉', crop: '蔥'},
+{lat: 24.709080, lng: 121.712900, risk: 'medium', suit: 0.6325, site: 'G00055', town: '宜蘭縣員山鄉', crop: '蔥'},
+{lat: 24.714260, lng: 121.714700, risk: 'medium', suit: 0.6325, site: 'G00056', town: '宜蘭縣員山鄉', crop: '蔬菜'},
+{lat: 24.714410, lng: 121.714800, risk: 'medium', suit: 0.6325, site: 'G00056', town: '宜蘭縣員山鄉', crop: '蔬菜'},
+{lat: 24.684830, lng: 121.716800, risk: 'medium', suit: 0.7564, site: 'G00047', town: '宜蘭縣三星鄉', crop: '蔥'},
+{lat: 24.684870, lng: 121.717600, risk: 'medium', suit: 0.7564, site: 'G00043', town: '宜蘭縣三星鄉', crop: '蔥'},
+{lat: 24.718960, lng: 121.720500, risk: 'medium', suit: 0.6110, site: 'G00054', town: '宜蘭縣員山鄉', crop: '蔥'},
+{lat: 24.710420, lng: 121.732100, risk: 'medium', suit: 0.6154, site: 'G00054', town: '宜蘭縣員山鄉', crop: '蔥'},
+{lat: 24.759050, lng: 121.769300, risk: 'medium', suit: 0.6862, site: 'G00052', town: '宜蘭縣宜蘭市', crop: '蔬菜'},
+{lat: 24.765160, lng: 121.772900, risk: 'medium', suit: 0.6862, site: 'G00051', town: '宜蘭縣宜蘭市', crop: '蔬菜'},
+{lat: 24.718700, lng: 121.773600, risk: 'medium', suit: 0.5933, site: 'G00048', town: '宜蘭縣壯圍鄉', crop: '蔬菜'},
+{lat: 24.767850, lng: 121.775000, risk: 'medium', suit: 0.6208, site: 'G00053', town: '宜蘭縣宜蘭市', crop: '蔥'},
+{lat: 24.765750, lng: 121.775500, risk: 'medium', suit: 0.6203, site: 'G00051', town: '宜蘭縣宜蘭市', crop: '蔬菜'},
+{lat: 24.719280, lng: 121.775600, risk: 'medium', suit: 0.5936, site: 'G00050', town: '宜蘭縣壯圍鄉', crop: '蔬菜'},
+{lat: 24.825830, lng: 121.775800, risk: 'medium', suit: 0.6728, site: 'G00058', town: '宜蘭縣礁溪鄉', crop: '蕹菜'},
+{lat: 24.825970, lng: 121.775800, risk: 'medium', suit: 0.6728, site: 'G00057', town: '宜蘭縣礁溪鄉', crop: '蕹菜'},
+{lat: 24.828080, lng: 121.777800, risk: 'medium', suit: 0.6728, site: 'G00058', town: '宜蘭縣礁溪鄉', crop: '蕹菜'},
+{lat: 24.827860, lng: 121.778300, risk: 'medium', suit: 0.6728, site: 'G00057', town: '宜蘭縣礁溪鄉', crop: '蕹菜'},
+{lat: 24.719940, lng: 121.783600, risk: 'medium', suit: 0.5948, site: 'G00049', town: '宜蘭縣壯圍鄉', crop: '蔬菜'},
+{lat: 24.718870, lng: 121.799100, risk: 'medium', suit: 0.5965, site: 'G00048', town: '宜蘭縣壯圍鄉', crop: '蔬菜'},
+{lat: 24.718900, lng: 121.799500, risk: 'medium', suit: 0.5965, site: 'G00050', town: '宜蘭縣壯圍鄉', crop: '蔬菜'}
+        ];
+
+        const riskAreasSE = [
+{lat: 24.465160, lng: 120.785400, risk: 'low', suit: 0.1684, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.469460, lng: 120.787200, risk: 'low', suit: 0.1580, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.468100, lng: 120.775900, risk: 'low', suit: 0.1653, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.463360, lng: 120.783300, risk: 'low', suit: 0.1778, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.464890, lng: 120.776100, risk: 'low', suit: 0.1778, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.432870, lng: 120.812300, risk: 'low', suit: 0.1308, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.432210, lng: 120.809600, risk: 'low', suit: 0.1308, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.461670, lng: 120.775800, risk: 'low', suit: 0.1778, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.470330, lng: 120.776700, risk: 'low', suit: 0.1653, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.462170, lng: 120.778100, risk: 'low', suit: 0.1778, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.767850, lng: 121.775000, risk: 'high', suit: 0.9972, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.690850, lng: 121.682200, risk: 'high', suit: 0.9951, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.759050, lng: 121.769300, risk: 'high', suit: 0.9981, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.719940, lng: 121.783600, risk: 'high', suit: 0.9993, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.719280, lng: 121.775600, risk: 'high', suit: 0.9995, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.765160, lng: 121.772900, risk: 'high', suit: 0.9981, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.714410, lng: 121.714800, risk: 'high', suit: 0.9995, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.666390, lng: 121.687000, risk: 'high', suit: 0.9967, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.664840, lng: 121.636400, risk: 'high', suit: 0.8740, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.684830, lng: 121.716800, risk: 'high', suit: 0.9996, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.718870, lng: 121.799100, risk: 'high', suit: 0.9991, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.709070, lng: 121.712400, risk: 'high', suit: 0.9995, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.718960, lng: 121.720500, risk: 'high', suit: 0.9996, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.686260, lng: 121.658600, risk: 'high', suit: 0.9662, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.686529, lng: 121.657879, risk: 'high', suit: 0.9266, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.688968, lng: 121.685419, risk: 'high', suit: 0.9979, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.695057, lng: 121.679656, risk: 'high', suit: 0.9943, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.659668, lng: 121.628036, risk: 'high', suit: 0.8464, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.671403, lng: 121.669335, risk: 'high', suit: 0.9845, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.668345, lng: 121.636215, risk: 'high', suit: 0.8739, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.681787, lng: 121.688396, risk: 'high', suit: 0.9979, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.669000, lng: 121.640000, risk: 'high', suit: 0.8739, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.695102, lng: 121.689315, risk: 'high', suit: 0.9977, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.367877, lng: 120.618283, risk: 'high', suit: 0.8039, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.365121, lng: 120.623871, risk: 'high', suit: 0.8812, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.327609, lng: 120.604224, risk: 'low', suit: 0.4613, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.327449, lng: 120.604041, risk: 'low', suit: 0.4613, site: '甜菜田間點', town: '', crop: ''},
+{lat: 24.367068, lng: 120.620594, risk: 'high', suit: 0.8039, site: '甜菜田間點', town: '', crop: ''}
+        ];
+        let riskAreas = riskAreasSL;
+
+        // 初始化地圖
+        function initMap() {
+            try {
+                console.log('開始初始化地圖 (Google Maps)...');
+
+                // 檢查 Google Maps 是否載入
+                if (typeof google === 'undefined' || !google.maps) {
+                    console.error('Google Maps 尚未載入');
+                    handleMapError(new Error('Google Maps 函式庫尚未載入'));
+                    return;
+                }
+
+                // 檢查地圖容器是否存在
+                const mapContainer = document.getElementById('map');
+                if (!mapContainer) {
+                    console.error('找不到地圖容器');
+                    return;
+                }
+
+                // 移除載入提示
+                const loadingDiv = document.getElementById('mapLoading');
+                if (loadingDiv) {
+                    loadingDiv.style.display = 'none';
+                }
+
+                // 建立地圖
+                map = new google.maps.Map(document.getElementById('map'), {
+                    center: { lat: 23.5, lng: 121 },
+                    zoom: 8,
+                    mapTypeControl: true,
+                    streetViewControl: false,
+                    fullscreenControl: true,
+                    gestureHandling: 'greedy'
+                });
+
+                // 單一資訊視窗實例，marker／circle／田間點共用、切換內容
+                infoWindow = new google.maps.InfoWindow();
+
+                // 疊加全台模型預測面 + 田間調查點 + 圖層切換
+                setTimeout(() => {
+                    setupLayers();
+                }, 500);
+
+                console.log('地圖初始化成功 (Google Maps)');
+
+                // 移除錯誤訊息（如果有的話）
+                if (loadingDiv) {
+                    loadingDiv.style.display = 'none';
+                }
+
+            } catch (error) {
+                console.error('地圖初始化失敗:', error);
+                handleMapError(error);
+            }
+        }
+
+        // 處理地圖錯誤
+        function handleMapError(error) {
+            const loadingDiv = document.getElementById('mapLoading');
+            if (loadingDiv) {
+                loadingDiv.style.display = 'block';
+                loadingDiv.innerHTML = `
+                    <div style="padding: 20px; color: #666;">
+                        <p>地圖載入失敗</p>
+                        <p style="font-size: 0.9em; margin: 10px 0;">錯誤訊息: ${error.message}</p>
+                        <button onclick="retryMapLoad()" class="btn btn-secondary" style="margin-top: 10px;">
+                            🔄 重試載入
+                        </button>
+                        <p style="font-size: 0.85em; margin-top: 15px; color: #999;">
+                            提示：您仍可使用左側功能進行預測，只是無法在地圖上顯示
+                        </p>
+                    </div>
+                `;
+            }
+        }
+
+        // 重試載入地圖
+        function retryMapLoad() {
+            const loadingDiv = document.getElementById('mapLoading');
+            if (loadingDiv) {
+                loadingDiv.innerHTML = '地圖載入中...';
+            }
+            initMap();
+        }
+
+        // 切換目標物種：更新風險點集、標題，並重繪疊圖/田間點/圖層控制
+        function changeSpecies() {
+            currentSpecies = document.getElementById('speciesSelect').value;
+            riskAreas = (currentSpecies === 'SE') ? riskAreasSE : riskAreasSL;
+            const zhName = (currentSpecies === 'SE') ? '甜菜夜蛾' : '斜紋夜蛾';
+            const t = document.getElementById('speciesTitle');
+            if (t) t.textContent = zhName;
+            if (map) {
+                if (modelOverlay) { modelOverlay.setMap(null); modelOverlay = null; }
+                if (waterOverlay) { waterOverlay.setMap(null); waterOverlay = null; }
+                if (fieldCircles.length) { fieldCircles.forEach(c => c.setMap(null)); fieldCircles = []; }
+                removeLayerControl();
+                if (currentMarker) { currentMarker.setMap(null); currentMarker = null; }
+                if (predictionCircle) { predictionCircle.setMap(null); predictionCircle = null; }
+                if (infoWindow) infoWindow.close();
+            }
+            const rp = document.getElementById('result');
+            if (rp) rp.classList.remove('show');
+            setupLayers();
+        }
+
+        // 疊加圖層：全台模型預測風險面 (GroundOverlay) + 田間調查點 + 圖層切換控制
+        async function setupLayers() {
+            if (!map || typeof google === 'undefined' || !google.maps) {
+                console.log('地圖或 Google Maps 未就緒');
+                return;
+            }
+            const myRequestId = ++layerRequestId;
+            try {
+                // 1) 取得預測圖層地理範圍（Google 用 {north,south,east,west}）
+                let bounds = { north: 25.299964, south: 21.9001, east: 121.999926, west: 119.3167 };  // 後援預設
+                try {
+                    const h = await (await fetch(`${API_BASE}/health`)).json();
+                    if (h.bounds) {
+                        bounds = {
+                            north: h.bounds.lat_max, south: h.bounds.lat_min,
+                            east: h.bounds.lon_max, west: h.bounds.lon_min
+                        };
+                    }
+                } catch (e) { console.warn('取 bounds 失敗，用預設值', e); }
+
+                // 等待期間若使用者又切換物種，放棄這一次的結果，交給最新的請求處理
+                if (myRequestId !== layerRequestId) return;
+
+                // 2) 全台模型預測風險面 (涵蓋所有 ~4.8 萬個 1km 預測格)
+                modelOverlay = new google.maps.GroundOverlay(
+                    `${API_BASE}/api/maps/${currentSpecies}/overlay?type=risk`, bounds,
+                    { opacity: 0.6, clickable: false });
+                modelOverlay.setMap(map);
+
+                // 2b) 水域面 (蓋掉未遮罩雲端疊圖在河川/水庫/魚塭上的風險色)
+                //     後於模型面加入，繪製順序在上，達到遮蓋效果
+                waterOverlay = new google.maps.GroundOverlay(WATER_OVERLAY_PNG, bounds,
+                    { opacity: 1, clickable: false });
+                waterOverlay.setMap(map);
+
+                // 3) 田間調查點 (預設不顯示，可在右上角圖層面板開啟)
+                fieldCircles = [];
+                riskAreas.forEach(area => {
+                    const color = area.risk === 'high' ? '#eb3349' :
+                                 area.risk === 'medium' ? '#f7971e' : '#56ab2f';
+                    const circle = new google.maps.Circle({
+                        strokeColor: color, strokeOpacity: 1, strokeWeight: 2,
+                        fillColor: color, fillOpacity: 0.5,
+                        center: { lat: area.lat, lng: area.lng }, radius: 1000,
+                        map: null   // 預設隱藏
+                    });
+                    const info = `<strong>${area.site || '田間調查點'}</strong>${area.town ? ` (${area.town})` : ''}<br>` +
+                        `作物: ${area.crop || '-'}<br>` +
+                        `風險等級: ${area.risk === 'high' ? '高' : area.risk === 'medium' ? '中' : '低'}<br>` +
+                        `模型適存值 EI: ${area.suit != null ? area.suit.toFixed(3) : '-'}<br>` +
+                        `座標: ${area.lat.toFixed(4)}, ${area.lng.toFixed(4)}`;
+                    circle.addListener('click', (e) => {
+                        if (infoWindow) { infoWindow.setContent(info); infoWindow.setPosition(e.latLng); infoWindow.open(map); }
+                    });
+                    fieldCircles.push(circle);
+                });
+
+                // 4) 自訂圖層切換控制面板（Google Maps 無內建，於右上角自建）
+                layerControlDiv = buildLayerControl();
+                map.controls[google.maps.ControlPosition.TOP_RIGHT].push(layerControlDiv);
+
+                console.log('圖層載入完成 (模型預測面 + 田間點)');
+            } catch (error) {
+                console.error('setupLayers 發生錯誤:', error);
+            }
+        }
+
+        // 建立自訂圖層切換面板（取代原本的圖層控制項）
+        function buildLayerControl() {
+            const div = document.createElement('div');
+            div.style.cssText = 'background:#fff;padding:8px 12px;margin:10px;border-radius:6px;' +
+                'box-shadow:0 1px 4px rgba(0,0,0,.3);font-size:13px;line-height:1.9;' +
+                "font-family:'Microsoft JhengHei',sans-serif;user-select:none;";
+            const spName = currentSpecies === 'SE' ? '甜菜' : '斜紋';
+            div.innerHTML =
+                `<label style="display:block;cursor:pointer;"><input type="checkbox" id="lyrModel" checked> 🗺️ ${spName}夜蛾 模型預測風險面</label>` +
+                `<label style="display:block;cursor:pointer;"><input type="checkbox" id="lyrField"> 📍 田間調查點 (${riskAreas.length})</label>` +
+                `<label style="display:block;cursor:pointer;"><input type="checkbox" id="lyrWater" checked> 💧 水域 (不評估風險)</label>`;
+            div.querySelector('#lyrModel').addEventListener('change', (e) => {
+                if (modelOverlay) modelOverlay.setMap(e.target.checked ? map : null);
+            });
+            div.querySelector('#lyrField').addEventListener('change', (e) => {
+                fieldCircles.forEach(c => c.setMap(e.target.checked ? map : null));
+            });
+            div.querySelector('#lyrWater').addEventListener('change', (e) => {
+                if (waterOverlay) waterOverlay.setMap(e.target.checked ? map : null);
+            });
+            return div;
+        }
+
+        // 移除自訂圖層面板
+        function removeLayerControl() {
+            if (layerControlDiv && map) {
+                const arr = map.controls[google.maps.ControlPosition.TOP_RIGHT];
+                for (let i = 0; i < arr.getLength(); i++) {
+                    if (arr.getAt(i) === layerControlDiv) { arr.removeAt(i); break; }
+                }
+            }
+            layerControlDiv = null;
+        }
+
+        // 預測蟲害 — 呼叫雲端 MaxEnt 模型 API
+        // ── 水域遮罩 (OSM 面狀水域：水庫＋河道面＋一般水域含魚塭) ──
+        // 1km 格水域佔比 >= 0.5 者視為水域；物種不會出現，風險以「無」呈現、適生度 0。
+        // 遮罩共 622 格 / 487 km²(占陸域格 1.30%)。田間驗證點無一落於水域格，故不影響模型評估。
+        const WATER_MASK = {
+            ncols: 322, nrows: 408, xll: 119.3167, yll: 21.9001, cs: 0.008333,
+            cells: new Set([4758,4759,5079,5080,5081,5082,5083,5084,5400,5401,5405,5406,5407,5722,5729,5730,5766,6052,6088,6374,6409,6696,7341,7663,7664,8634,9600,9920,9921,14409,14445,14764,14765,14766,15084,15085,15088,15407,15410,17260,17582,18009,18010,18331,18651,18652,18653,18912,18913,18914,22104,22425,22841,24655,26255,26577,26578,27353,27354,27355,27676,29260,32819,34607,34608,34727,34931,35255,35578,35901,36225,36226,36227,36553,36554,36555,36878,36887,36888,37177,37178,37201,37499,37500,37501,37502,37503,37524,37826,37827,37828,37829,37848,37849,37851,37852,37965,38152,38175,38289,38290,38476,38611,38799,38827,39104,39105,39106,39123,39124,39145,39146,39427,39428,39749,40070,40151,40153,40392,40713,41034,42644,42645,42646,42966,42968,42969,43287,43291,43608,44714,44715,44903,48749,49070,49071,49391,49392,49713,49714,49806,50034,50078,50079,50080,50128,50356,50450,50678,50772,50997,50998,51153,51641,51962,52283,52284,52751,52760,53071,53082,53399,53724,54687,54688,55008,55254,55329,55498,55574,55575,55576,55577,55578,55651,55896,55897,55898,55899,55972,56219,56293,56541,56615,56781,56788,56789,56793,56798,56799,56804,56925,57127,57128,57129,57168,57174,57175,57248,57258,57453,57454,57572,57578,57579,57580,57779,57780,57781,57782,57783,57784,57785,57786,57787,57788,57789,57790,57803,58104,58105,58106,58107,58108,58109,58110,58111,58112,58113,58114,58124,58390,58435,58436,58437,58438,58439,58445,58711,58712,58713,58763,59032,59033,59034,59354,59355,59356,59408,59674,59675,59676,59677,59995,59996,59997,59998,59999,60152,60317,60318,60319,60320,60321,60639,60640,60641,60642,60796,60961,60962,60963,61116,61117,61118,61282,61283,61284,61927,62303,65143,65144,65465,65466,65787,65788,66109,66110,66111,66431,66432,66433,66755,67075,67076,67397,67398,67719,67720,67721,67723,68042,68364,68365,68366,68687,68688,69011,69012,70619,70657,70661,70766,70941,70944,70982,70983,71087,71265,71408,71586,71587,71588,71730,71906,71907,71908,72051,72228,72229,72230,72373,72551,72552,72695,72876,73016,73196,73198,73338,73518,73659,73981,74483,74484,74805,74806,74809,74844,74946,75123,75125,75126,75127,75128,75129,75130,75131,75268,75446,75447,75450,75590,75769,75911,76089,76090,76091,76092,76097,76098,76099,76233,76412,76413,76414,76415,76418,76733,76734,76735,76739,76788,76789,76790,76877,77055,77056,77057,77058,77109,77110,77198,77199,77379,77380,77430,77516,77517,77703,77752,77753,78073,78074,78395,78396,78716,79038,79359,79360,79681,80270,80591,80627,80628,80914,80948,80949,80952,81235,81236,81271,81273,81274,81594,82522,82844,83166,83167,83232,83487,83488,83489,83809,83810,83811,84130,84131,84451,84513,84588,84834,85155,85156,85476,85477,85555,85798,85877,86066,86199,86387,86521,86708,86843,87164,87363,87485,87683,87684,87685,87686,87687,87806,88002,88004,88005,88006,88007,88008,88326,88327,88328,88329,88330,88331,88648,88649,88650,88652,89618,89940,90060,90382,90585,90704,91270,91592,91668,92311,92519,92633,92894,92955,93216,93272,93273,93277,93537,93808,93810,93857,93858,94130,94131,94132,94178,94179,94243,94453,94454,94498,94564,94776,94818,94819,94886,95140,95207,95461,95529,95781,95782,95851,96065,96066,96079,96080,96102,96103,96173,96386,96387,96388,96422,96423,96496,96709,96741,96742,96743,96744,97031,97032,97059,97060,97061,97062,97067,97141,97354,97380,97381,97392,97393,97676,97702,97716,97717,97788,98024,98041,98110,98346,98364,98668,98990,99009,99312,99332,99634,99933,99956,100256,100278,100577,100578,100599,100900,100920,101242,101876,102208,102530,103475,103799,103800,103818,104140,105429,105735,105751,106058,106073,106377,106378,106381,106382,106394,106700,106701,106716,107037,107358,107680,108002,108324,108646,108968,109939,109940,110262,110263,110585,110586,111234,111557,111558,111881,112852,128326,128327])
+        };
+        function isWaterPoint(lat, lng) {
+            const M = WATER_MASK;
+            const col = Math.floor((lng - M.xll) / M.cs);
+            const row = M.nrows - 1 - Math.floor((lat - M.yll) / M.cs);
+            if (col < 0 || col >= M.ncols || row < 0 || row >= M.nrows) return false;
+            return M.cells.has(row * M.ncols + col);
+        }
+
+        async function predictPest() {
+            const lat = parseFloat(document.getElementById('latitude').value);
+            const lng = parseFloat(document.getElementById('longitude').value);
+
+            if (isNaN(lat) || isNaN(lng)) {
+                alert('請輸入有效的經緯度座標！');
+                return;
+            }
+            if (lat < 21.5 || lat > 25.5 || lng < 119.5 || lng > 122.5) {
+                alert('請輸入台灣地區範圍內的座標！\n緯度: 21.5° - 25.5° N\n經度: 119.5° - 122.5° E');
+                return;
+            }
+
+            if (map) {
+                if (currentMarker) currentMarker.setMap(null);
+                if (predictionCircle) predictionCircle.setMap(null);
+                try {
+                    const pos = { lat: lat, lng: lng };
+                    currentMarker = new google.maps.Marker({ position: pos, map: map });
+                    const posInfo = `查詢位置<br>座標: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+                    if (infoWindow) { infoWindow.setContent(posInfo); infoWindow.open(map, currentMarker); }
+                    currentMarker.addListener('click', () => {
+                        if (infoWindow) { infoWindow.setContent(posInfo); infoWindow.open(map, currentMarker); }
+                    });
+                    map.setCenter(pos);
+                    map.setZoom(14);
+                } catch (e) { console.error('標記失敗:', e); }
+            }
+
+            // 落在水域(河川/水庫/湖泊/魚塭)→ 非害蟲棲地，風險顯示「無」、適生度 0，不查 API
+            if (isWaterPoint(lat, lng)) {
+                displayResult('water', lat, lng, 0);
+                return;
+            }
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/risk/point?lon=${lng}&lat=${lat}&species=${currentSpecies}`);
+                if (!resp.ok) {
+                    alert(`預測 API 回傳錯誤（HTTP ${resp.status}），請稍後再試。`);
+                    console.error('API 回應錯誤:', resp.status, resp.statusText);
+                    return;
+                }
+                const data = await resp.json();
+                if (!data.success || !data.predictions || !data.predictions.length) {
+                    alert('此座標無模型預測值（可能落在海域或圖層範圍外）');
+                    return;
+                }
+                const pred = data.predictions[0];
+                const riskMap = { '高': 'high', '中': 'medium', '低': 'low' };
+                const risk = riskMap[pred.risk_level] || 'unknown';
+                displayResult(risk, lat, lng, (typeof pred.suitability === 'number') ? pred.suitability : null);
+            } catch (e) {
+                alert('無法連線到預測 API，請確認網路或 API 服務狀態。\n' + e.message);
+                console.error('API 呼叫失敗:', e);
+            }
+        }
+
+        // 顯示預測結果
+        function displayResult(risk, lat, lng, suit) {
+            const resultPanel = document.getElementById('result');
+            const signalLight = document.getElementById('signalLight');
+            const preventionSuggestions = document.getElementById('preventionSuggestions');
+            
+            resultPanel.classList.add('show');
+            
+            // 設定燈號
+            signalLight.className = 'signal-light';
+            let signalText = '';
+            let preventionHTML = '';
+            
+            if (risk === 'water') {
+                signalLight.classList.add('signal-water');
+                signalText = '⚪ 無風險（水域）';
+                preventionHTML = `
+                    <div class="prevention-item" style="border-left-color: #0072B2;">
+                        <strong>此位置為水域，不評估害蟲風險</strong><br>
+                        • 該 1 公里網格以水域為主（河川、水庫、湖泊或魚塭）<br>
+                        • 非斜紋夜蛾／甜菜夜蛾之棲地，適生度以 0 呈現<br>
+                        • 如需查詢鄰近農地風險，請移動座標至陸域田區
+                    </div>
+                    <div class="prevention-item">
+                        <strong>水域判定依據：</strong><br>
+                        OpenStreetMap 面狀水域（水庫＋河道面＋一般水域含魚塭），
+                        1 公里網格水域佔比達 50% 以上者
+                    </div>
+                `;
+            } else if (risk === 'unknown') {
+                signalLight.classList.add('signal-unknown');
+                signalText = '⚪ 無法判定';
+                preventionHTML = `
+                    <div class="prevention-item" style="border-left-color: #6b7280;">
+                        <strong>模型回傳了無法辨識的風險等級</strong><br>
+                        • 請稍後再試一次<br>
+                        • 若持續發生，可能是預測 API 的回傳格式有變動，請聯絡系統管理者
+                    </div>
+                `;
+            } else if (risk === 'low') {
+                signalLight.classList.add('signal-green');
+                signalText = '🟢 低風險';
+                preventionHTML = `
+                    <div class="prevention-item">
+                        <strong>等級一：基本防護</strong><br>
+                        • 定期巡查田區，觀察作物生長狀況<br>
+                        • 維持田間清潔，清除雜草與落葉<br>
+                        • 建議每週巡查1-2次<br>
+                    </div>
+                    <div class="prevention-item">
+                        <strong>預防措施：</strong><br>
+                        • 使用黏板監測蟲害密度<br>
+                        • 保持良好的田間通風<br>
+                        • 適當施肥
+                    </div>
+                `;
+            } else if (risk === 'medium') {
+                signalLight.classList.add('signal-yellow');
+                signalText = '🟡 中風險';
+                preventionHTML = `
+                    <div class="prevention-item">
+                        <strong>等級二：加強監控</strong><br>
+                        • 增加巡查頻率至每2-3天一次<br>
+                        • 設置誘引器、黏板<br>
+                        • 記錄蟲害發生種類與數量
+            
+                    </div>
+                    <div class="prevention-item">
+                        <strong>防治措施：</strong><br>
+                        • 局部施用生物防治資材<br>
+                        • 釋放天敵昆蟲（如寄生蜂）
+                    
+                    </div>
+                `;
+            } else {
+                signalLight.classList.add('signal-red');
+                signalText = '🔴 高風險';
+                preventionHTML = `
+                    <div class="prevention-item">
+                        <strong>等級三：緊急防治</strong><br>
+                        • 立即進行全面性防治<br>
+                        • 每日監控蟲害發展情況
+                    
+                        
+                    </div>
+                    <div class="prevention-item">
+                        <strong>緊急措施：</strong><br>
+                        • 施用推薦農藥進行化學防治<br>
+                        • 移除嚴重受害植株<br>
+                        • 實施區域聯防
+                    </div>
+                    <div class="prevention-item" style="border-left-color: #eb3349;">
+                        <strong>⚠️ 警告：</strong><br>
+                        請嚴格遵守農藥使用規範<br>
+                        建議鄰近農戶共同防治
+                    </div>
+                `;
+            }
+            
+            signalLight.innerHTML = signalText + (suit != null ? `<br><span style="font-size:1rem;font-weight:normal;">適生度 EI = ${suit.toFixed(3)}</span>` : '');
+            preventionSuggestions.innerHTML = preventionHTML;
+            
+            // 在地圖上顯示預測範圍（0.5公里） - 如果地圖已載入
+            if (map && currentMarker) {
+                try {
+                    const color = risk === 'water' ? '#0072B2' : risk === 'unknown' ? '#6b7280' : risk === 'high' ? '#eb3349' : 
+                                 risk === 'medium' ? '#f7971e' : '#56ab2f';
+
+                    predictionCircle = new google.maps.Circle({
+                        strokeColor: color, strokeOpacity: 1, strokeWeight: 3,
+                        fillColor: color, fillOpacity: 0.2,
+                        center: { lat: lat, lng: lng }, radius: 500,  // 預測點顯示500公尺範圍
+                        map: map
+                    });
+
+                    const rangeInfo = `預測範圍<br>` +
+                        `風險等級: ${risk === 'water' ? '無（水域）' : risk === 'unknown' ? '無法判定' : risk === 'high' ? '高' : risk === 'medium' ? '中' : '低'}<br>` +
+                        `查詢點周圍 0.5 公里`;
+                    predictionCircle.addListener('click', (e) => {
+                        if (infoWindow) { infoWindow.setContent(rangeInfo); infoWindow.setPosition(e.latLng); infoWindow.open(map); }
+                    });
+                } catch (e) {
+                    console.error('無法在地圖上顯示預測範圍:', e);
+                }
+            }
+        }
+
+        // 取得目前位置
+        function getCurrentLocation() {
+            if (!navigator.geolocation) {
+                alert('您的瀏覽器不支援地理定位功能');
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    document.getElementById('latitude').value = position.coords.latitude.toFixed(4);
+                    document.getElementById('longitude').value = position.coords.longitude.toFixed(4);
+                    predictPest();
+                },
+                error => {
+                    alert('無法取得您的位置，請確認是否已開啟定位服務');
+                    console.error('定位錯誤:', error);
+                }
+            );
+        }
+
+        // 設定隨機測試位置
+        function setRandomLocation() {
+            const randomArea = riskAreas[Math.floor(Math.random() * riskAreas.length)];
+            // 加入一些隨機偏移 (縮小偏移範圍以配合1公里圈圈)
+            const offsetLat = (Math.random() - 0.5) * 0.01;  // 約1公里內的偏移
+            const offsetLng = (Math.random() - 0.5) * 0.01;
+            
+            document.getElementById('latitude').value = (randomArea.lat + offsetLat).toFixed(4);
+            document.getElementById('longitude').value = (randomArea.lng + offsetLng).toFixed(4);
+            predictPest();
+        }
+
+        // 清除所有輸入與結果
+        function clearAll() {
+            document.getElementById('latitude').value = '';
+            document.getElementById('longitude').value = '';
+            document.getElementById('result').classList.remove('show');
+            
+            if (currentMarker && map) {
+                currentMarker.setMap(null);
+                currentMarker = null;
+            }
+            
+            if (predictionCircle && map) {
+                predictionCircle.setMap(null);
+                predictionCircle = null;
+            }
+
+            if (infoWindow) infoWindow.close();
+            
+            if (map) {
+                map.setCenter({ lat: 23.5, lng: 121 });
+                map.setZoom(8);
+            }
+        }
+
+        // Enter 鍵觸發預測
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM 載入完成');
+            
+            // 綁定 Enter 鍵事件
+            const latInput = document.getElementById('latitude');
+            const lngInput = document.getElementById('longitude');
+            
+            if (latInput) {
+                latInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') predictPest();
+                });
+            }
+            
+            if (lngInput) {
+                lngInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') predictPest();
+                });
+            }
+            
+            // 地圖不在此初始化：由 Google Maps API 載入完成後透過 callback(__initGoogleMap) 自動觸發
+        });
+
+        // 逾時偵測：若 Google Maps 遲遲未載入（網路或金鑰問題），顯示錯誤提示
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                if (!map && (typeof google === 'undefined' || !google.maps)) {
+                    console.error('Google Maps 逾時未載入');
+                    handleMapError(new Error('Google Maps 載入逾時，請檢查網路連線與 API 金鑰設定'));
+                }
+            }, 6000);
+        });
+    </script>
+</body>
+</html>
